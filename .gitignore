@@ -1,5 +1,8 @@
 # Go build artifacts
 dazedtrader
+debug
+debug_auth
+test_auth
 *.exe
 *.exe~
 *.dll
@@ -15,10 +18,32 @@ dazedtrader
 # Go dependency modules
 go.sum
 
-# Authentication tokens (sensitive!)
+# Authentication & API credentials (CRITICAL - NEVER COMMIT!)
 .token
 *.token
 auth_token.json
+api_key.txt
+*.key
+*.pem
+*.p12
+*.pfx
+credentials.json
+secrets.json
+auth_data.json
+robinhood_auth.json
+
+# API keys and private keys
+*apikey*
+*private_key*
+*api_secret*
+*access_token*
+*refresh_token*
+
+# Local storage files (may contain sensitive data)
+local_storage.json
+user_data.json
+session.json
+*.session
 
 # IDE
 .vscode/
@@ -36,9 +61,25 @@ auth_token.json
 ehthumbs.db
 Thumbs.db
 
-# Logs
+# Logs (may contain sensitive info)
 *.log
+debug.log
+error.log
+api.log
 
 # Config files with credentials
 config.json
 .env
+.env.local
+.env.production
+.env.staging
+
+# Backup files that might contain credentials
+*.bak
+*.backup
+*.old
+*.orig
+
+# Test files with real credentials
+test_auth_real.go
+*_with_real_keys*

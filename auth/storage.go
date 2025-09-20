@@ -7,13 +7,13 @@ import (
 	"path/filepath"
 )
 
-type TokenData struct {
-	Token     string `json:"token"`
+type APIKeyData struct {
+	APIKey    string `json:"api_key"`
 	Username  string `json:"username"`
 	ExpiresAt int64  `json:"expires_at"`
 }
 
-func getTokenFile() (string, error) {
+func getAPIKeyFile() (string, error) {
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return "", fmt.Errorf("failed to get home directory: %w", err)
@@ -24,68 +24,68 @@ func getTokenFile() (string, error) {
 		return "", fmt.Errorf("failed to create config directory: %w", err)
 	}
 
-	return filepath.Join(configDir, "auth_token.json"), nil
+	return filepath.Join(configDir, "api_key.json"), nil
 }
 
-func SaveToken(token, username string, expiresAt int64) error {
-	tokenFile, err := getTokenFile()
+func SaveAPIKey(apiKey, username string, expiresAt int64) error {
+	apiKeyFile, err := getAPIKeyFile()
 	if err != nil {
 		return err
 	}
 
-	tokenData := TokenData{
-		Token:     token,
+	apiKeyData := APIKeyData{
+		APIKey:    apiKey,
 		Username:  username,
 		ExpiresAt: expiresAt,
 	}
 
-	data, err := json.Marshal(tokenData)
+	data, err := json.Marshal(apiKeyData)
 	if err != nil {
-		return fmt.Errorf("failed to marshal token data: %w", err)
+		return fmt.Errorf("failed to marshal API key data: %w", err)
 	}
 
-	if err := os.WriteFile(tokenFile, data, 0600); err != nil {
-		return fmt.Errorf("failed to write token file: %w", err)
+	if err := os.WriteFile(apiKeyFile, data, 0600); err != nil {
+		return fmt.Errorf("failed to write API key file: %w", err)
 	}
 
 	return nil
 }
 
-func LoadToken() (*TokenData, error) {
-	tokenFile, err := getTokenFile()
+func LoadAPIKey() (*APIKeyData, error) {
+	apiKeyFile, err := getAPIKeyFile()
 	if err != nil {
 		return nil, err
 	}
 
-	if _, err := os.Stat(tokenFile); os.IsNotExist(err) {
-		return nil, nil // No token file exists
+	if _, err := os.Stat(apiKeyFile); os.IsNotExist(err) {
+		return nil, nil // No API key file exists
 	}
 
-	data, err := os.ReadFile(tokenFile)
+	data, err := os.ReadFile(apiKeyFile)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read token file: %w", err)
+		return nil, fmt.Errorf("failed to read API key file: %w", err)
 	}
 
-	var tokenData TokenData
-	if err := json.Unmarshal(data, &tokenData); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal token data: %w", err)
+	var apiKeyData APIKeyData
+	if err := json.Unmarshal(data, &apiKeyData); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal API key data: %w", err)
 	}
 
-	return &tokenData, nil
+	return &apiKeyData, nil
 }
 
-func ClearToken() error {
-	tokenFile, err := getTokenFile()
+func ClearAPIKey() error {
+	apiKeyFile, err := getAPIKeyFile()
 	if err != nil {
 		return err
 	}
 
-	if _, err := os.Stat(tokenFile); os.IsNotExist(err) {
-		return nil // Token file doesn't exist
+	if _, err := os.Stat(apiKeyFile); os.IsNotExist(err) {
+		return nil // API key file doesn't exist
 	}
 
-	if err := os.Remove(tokenFile); err != nil {
-		return fmt.Errorf("failed to remove token file: %w", err)
+	if err := os.Remove(apiKeyFile); err != nil {
+		return fmt.Errorf("failed to remove API key file: %w", err)
 	}
 
 	return nil
