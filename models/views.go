@@ -255,9 +255,12 @@ func (m *AppModel) orderHistoryView() string {
 
 	if m.Loading {
 		content.WriteString(ui.LoadingStyle.Render("🔄 Loading order history...\n\n"))
-	} else if m.Portfolio == nil || len(m.Portfolio.Orders) == 0 {
-		content.WriteString("📊 Loading your order history...\n")
-		content.WriteString("This may take a moment on first load.\n\n")
+	} else if m.Portfolio == nil {
+		content.WriteString("📊 No portfolio data available.\n")
+		content.WriteString("Press 'R' or 'F5' to refresh.\n\n")
+	} else if len(m.Portfolio.Orders) == 0 {
+		content.WriteString("📊 No orders found.\n")
+		content.WriteString("Your order history will appear here once you start trading.\n\n")
 	} else {
 		// Order History
 		content.WriteString("📋 RECENT ORDERS\n")

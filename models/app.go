@@ -243,10 +243,11 @@ func (m *AppModel) LoadCryptoPortfolio() error {
 	}
 
 	// Get recent crypto orders first (before prices)
-	orders, err := m.CryptoClient.GetCryptoOrders()
+	// Use the new function with better field handling
+	orders, err := m.CryptoClient.GetCryptoOrdersWithParams(20) // Get up to 20 orders
 	var portfolioOrders []CryptoOrder
 	if err == nil {
-		maxOrders := 10
+		maxOrders := 20
 		if len(orders) < maxOrders {
 			maxOrders = len(orders)
 		}
@@ -266,6 +267,32 @@ func (m *AppModel) LoadCryptoPortfolio() error {
 				CreatedAt:      order.CreatedAt,
 				UpdatedAt:      order.UpdatedAt,
 			})
+		}
+	} else {
+		// Try the original method as fallback
+		orders, err = m.CryptoClient.GetCryptoOrders()
+		if err == nil {
+			maxOrders := 10
+			if len(orders) < maxOrders {
+				maxOrders = len(orders)
+			}
+
+			for i := 0; i < maxOrders; i++ {
+				order := orders[i]
+				portfolioOrders = append(portfolioOrders, CryptoOrder{
+					ID:             order.ID,
+					AccountNumber:  order.AccountNumber,
+					Symbol:         order.Symbol,
+					ClientOrderID:  order.ClientOrderID,
+					Side:           order.Side,
+					Type:           order.Type,
+					State:          order.State,
+					AveragePrice:   order.AveragePrice,
+					FilledQuantity: order.FilledAssetQuantity,
+					CreatedAt:      order.CreatedAt,
+					UpdatedAt:      order.UpdatedAt,
+				})
+			}
 		}
 	}
 
