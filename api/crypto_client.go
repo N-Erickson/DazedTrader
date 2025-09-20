@@ -312,6 +312,151 @@ func (c *CryptoClient) GetCryptoOrders() ([]CryptoOrder, error) {
 	return response.Results, nil
 }
 
+// GetCryptoOrdersWithParams retrieves crypto order history with query parameters
+func (c *CryptoClient) GetCryptoOrdersWithParams(limit int) ([]CryptoOrder, error) {
+	// Build query with parameters
+	endpoint := TradingURL + "/orders/"
+	if limit > 0 {
+		endpoint += fmt.Sprintf("?limit=%d", limit)
+	}
+
+	resp, err := c.makeRequest("GET", endpoint, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("API error %d: %s", resp.StatusCode, string(body))
+	}
+
+	// Read response body for better error handling
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %v", err)
+	}
+
+	// Try to parse the response structure first
+	var rawResponse map[string]interface{}
+	if err := json.Unmarshal(bodyBytes, &rawResponse); err != nil {
+		return nil, fmt.Errorf("failed to parse response: %v", err)
+	}
+
+	// Extract orders from results field
+	var orders []CryptoOrder
+	if results, ok := rawResponse["results"].([]interface{}); ok {
+		for _, result := range results {
+			if orderMap, ok := result.(map[string]interface{}); ok {
+				order := CryptoOrder{}
+
+				// Parse all fields according to Robinhood API documentation
+				if val, ok := orderMap["id"].(string); ok {
+					order.ID = val
+				}
+				if val, ok := orderMap["account_number"].(string); ok {
+					order.AccountNumber = val
+				}
+				if val, ok := orderMap["symbol"].(string); ok {
+					order.Symbol = val
+				}
+				if val, ok := orderMap["client_order_id"].(string); ok {
+					order.ClientOrderID = val
+				}
+				if val, ok := orderMap["side"].(string); ok {
+					order.Side = val
+				}
+				if val, ok := orderMap["type"].(string); ok {
+					order.Type = val
+				}
+				if val, ok := orderMap["state"].(string); ok {
+					order.State = val
+				}
+				if val, ok := orderMap["created_at"].(string); ok {
+					order.CreatedAt = val
+				}
+				if val, ok := orderMap["updated_at"].(string); ok {
+					order.UpdatedAt = val
+				}
+
+				// Handle average_price (can be string or float)
+				if val, ok := orderMap["average_price"].(string); ok {
+					if parsed, err := strconv.ParseFloat(val, 64); err == nil {
+						order.AveragePrice = parsed
+					}
+				} else if val, ok := orderMap["average_price"].(float64); ok {
+					order.AveragePrice = val
+				}
+
+				// Handle filled_asset_quantity (can be string or float)
+				if val, ok := orderMap["filled_asset_quantity"].(string); ok {
+					if parsed, err := strconv.ParseFloat(val, 64); err == nil {
+						order.FilledAssetQuantity = parsed
+					}
+				} else if val, ok := orderMap["filled_asset_quantity"].(float64); ok {
+					order.FilledAssetQuantity = val
+				}
+
+				// Also check for executions array if filled_asset_quantity is not present
+				if order.FilledAssetQuantity == 0 {
+					if executions, ok := orderMap["executions"].([]interface{}); ok && len(executions) > 0 {
+						// Sum up executed quantities
+						for _, exec := range executions {
+							if execMap, ok := exec.(map[string]interface{}); ok {
+								if qty, ok := execMap["quantity"].(string); ok {
+									if parsed, err := strconv.ParseFloat(qty, 64); err == nil {
+										order.FilledAssetQuantity += parsed
+									}
+								} else if qty, ok := execMap["quantity"].(float64); ok {
+									order.FilledAssetQuantity += qty
+								}
+							}
+						}
+					}
+				}
+
+				// Check for order config fields to extract quantity if filled_asset_quantity is 0
+				if order.FilledAssetQuantity == 0 {
+					// Check market_order_config
+					if marketConfig, ok := orderMap["market_order_config"].(map[string]interface{}); ok {
+						if qty, ok := marketConfig["asset_quantity"].(string); ok {
+							if parsed, err := strconv.ParseFloat(qty, 64); err == nil {
+								order.FilledAssetQuantity = parsed
+							}
+						} else if qty, ok := marketConfig["asset_quantity"].(float64); ok {
+							order.FilledAssetQuantity = qty
+						}
+					}
+					// Check limit_order_config
+					if limitConfig, ok := orderMap["limit_order_config"].(map[string]interface{}); ok {
+						if qty, ok := limitConfig["asset_quantity"].(string); ok {
+							if parsed, err := strconv.ParseFloat(qty, 64); err == nil {
+								order.FilledAssetQuantity = parsed
+							}
+						} else if qty, ok := limitConfig["asset_quantity"].(float64); ok {
+							order.FilledAssetQuantity = qty
+						}
+						// Also get limit price for average price if not set
+						if order.AveragePrice == 0 {
+							if price, ok := limitConfig["limit_price"].(string); ok {
+								if parsed, err := strconv.ParseFloat(price, 64); err == nil {
+									order.AveragePrice = parsed
+								}
+							} else if price, ok := limitConfig["limit_price"].(float64); ok {
+								order.AveragePrice = price
+							}
+						}
+					}
+				}
+
+				orders = append(orders, order)
+			}
+		}
+	}
+
+	return orders, nil
+}
+
 // PlaceCryptoOrder places a new crypto order (legacy)
 func (c *CryptoClient) PlaceCryptoOrder(order OrderRequest) (*CryptoOrder, error) {
 	resp, err := c.makeRequest("POST", TradingURL+"/orders/", order)
