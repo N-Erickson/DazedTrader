@@ -494,7 +494,7 @@ func (m *AppModel) formatTokenIndicators(symbols []string) string {
 
 // getTokenPriceIndicator returns a formatted token with price change indicator
 func (m *AppModel) getTokenPriceIndicator(symbol string) string {
-	// Try to find price data from portfolio holdings
+	// Try to find price data from portfolio holdings first
 	if m.Portfolio != nil {
 		for _, pos := range m.Portfolio.Holdings {
 			if pos.AssetCode == symbol || pos.AssetCode+"-USD" == symbol {
@@ -527,6 +527,14 @@ func (m *AppModel) getTokenPriceIndicator(symbol string) string {
 		}
 	}
 
-	// Return symbol without indicator if no price data found
-	return ui.NeutralStyle.Render(symbol)
+	// For tokens not in portfolio or market data, fetch live price change from API
+	priceChange := m.getLiveTokenPriceChange(symbol)
+	if priceChange > 0 {
+		return ui.PositiveStyle.Render(fmt.Sprintf("%s ↗", symbol))
+	} else if priceChange < 0 {
+		return ui.NegativeStyle.Render(fmt.Sprintf("%s ↘", symbol))
+	}
+
+	// Return symbol with neutral indicator if price data unavailable
+	return ui.NeutralStyle.Render(fmt.Sprintf("%s →", symbol))
 }
