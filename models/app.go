@@ -11,6 +11,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/google/uuid"
 )
 
 type AppModel struct {
@@ -2132,7 +2133,7 @@ func (m *AppModel) PlaceOrder() error {
 	}
 
 	// Use the new order placement method that matches the API
-	clientOrderID := fmt.Sprintf("dazed-%d", time.Now().Unix())
+	clientOrderID := uuid.New().String()
 	_, err := m.CryptoClient.PlaceCryptoOrderNew(
 		clientOrderID,
 		m.TradingForm.Side,

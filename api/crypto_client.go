@@ -367,9 +367,65 @@ func (c *CryptoClient) PlaceCryptoOrderNew(clientOrderID, side, orderType, symbo
 		return nil, fmt.Errorf("API error %d: %s", resp.StatusCode, string(body))
 	}
 
-	var cryptoOrder CryptoOrder
-	if err := json.NewDecoder(resp.Body).Decode(&cryptoOrder); err != nil {
+	// Read response body for manual parsing
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
 		return nil, err
+	}
+
+	// Parse as map first to handle string/float conversion
+	var orderMap map[string]interface{}
+	if err := json.Unmarshal(bodyBytes, &orderMap); err != nil {
+		return nil, err
+	}
+
+	// Convert map to CryptoOrder with proper type handling
+	cryptoOrder := CryptoOrder{}
+
+	if val, ok := orderMap["id"].(string); ok {
+		cryptoOrder.ID = val
+	}
+	if val, ok := orderMap["account_number"].(string); ok {
+		cryptoOrder.AccountNumber = val
+	}
+	if val, ok := orderMap["symbol"].(string); ok {
+		cryptoOrder.Symbol = val
+	}
+	if val, ok := orderMap["client_order_id"].(string); ok {
+		cryptoOrder.ClientOrderID = val
+	}
+	if val, ok := orderMap["side"].(string); ok {
+		cryptoOrder.Side = val
+	}
+	if val, ok := orderMap["type"].(string); ok {
+		cryptoOrder.Type = val
+	}
+	if val, ok := orderMap["state"].(string); ok {
+		cryptoOrder.State = val
+	}
+	if val, ok := orderMap["created_at"].(string); ok {
+		cryptoOrder.CreatedAt = val
+	}
+	if val, ok := orderMap["updated_at"].(string); ok {
+		cryptoOrder.UpdatedAt = val
+	}
+
+	// Handle average_price (can be string or float)
+	if val, ok := orderMap["average_price"].(string); ok {
+		if parsed, err := strconv.ParseFloat(val, 64); err == nil {
+			cryptoOrder.AveragePrice = parsed
+		}
+	} else if val, ok := orderMap["average_price"].(float64); ok {
+		cryptoOrder.AveragePrice = val
+	}
+
+	// Handle filled_asset_quantity (can be string or float)
+	if val, ok := orderMap["filled_asset_quantity"].(string); ok {
+		if parsed, err := strconv.ParseFloat(val, 64); err == nil {
+			cryptoOrder.FilledAssetQuantity = parsed
+		}
+	} else if val, ok := orderMap["filled_asset_quantity"].(float64); ok {
+		cryptoOrder.FilledAssetQuantity = val
 	}
 
 	return &cryptoOrder, nil
