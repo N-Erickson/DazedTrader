@@ -1,13 +1,6 @@
 # DazedTrader
 
-> **Advanced Crypto Trading Terminal for Robinhood**
-
-A powerful Terminal User Interface (TUI) application built with Go and Bubble Tea that connects to your Robinhood Crypto account, providing real-time portfolio management, trading capabilities, market data, and news feeds entirely within your terminal.
-
-![Go](https://img.shields.io/badge/Go-1.24+-00ADD8?style=flat&logo=go)
-![Bubble Tea](https://img.shields.io/badge/Bubble%20Tea-TUI-FF69B4?style=flat)
-![Crypto](https://img.shields.io/badge/Crypto-Trading-F7931E?style=flat&logo=bitcoin)
-![License](https://img.shields.io/badge/License-MIT-blue)
+A TUI for Robinhood Crypto trading.
 
 ## ✨ Features
 
@@ -19,20 +12,6 @@ A powerful Terminal User Interface (TUI) application built with Go and Bubble Te
 - **Real-Time Crypto News** - Live news feed from CryptoCompare API with impact analysis
 - **Live Price Updates** - Real-time pricing throughout the trading experience
 
-### 🎮 Beautiful Terminal Interface
-- **Bubble Tea Framework** - Modern, reactive TUI built with Go
-- **Lipgloss Styling** - Professional colors, layouts, and visual indicators
-- **Keyboard Navigation** - Intuitive menu navigation and shortcuts
-- **Responsive Design** - Adapts to any terminal size
-- **Real-time Updates** - Auto-refresh without screen flicker
-- **Color-coded Data** - Green/red indicators for gains/losses and buy/sell
-
-### 🔐 Security & Performance
-- **Ed25519 Authentication** - Secure API key and private key authentication
-- **Local Credential Storage** - Encrypted storage in user's home directory (~/.config/dazedtrader/)
-- **No Credential Commits** - Comprehensive .gitignore and security checks
-- **HTTPS Only** - All API communication encrypted
-- **Secure by Design** - Credentials never stored in source code
 
 ## 🚀 Installation & Setup
 
@@ -243,13 +222,7 @@ Last updated: 2:34 PM
 - **News Feed**: Every 15 minutes
 - **Trading Prices**: Real-time during order placement
 
-## 🛠️ Technical Architecture
 
-### Built With
-- **[Bubble Tea](https://github.com/charmbracelet/bubbletea)** - Modern TUI framework
-- **[Lipgloss](https://github.com/charmbracelet/lipgloss)** - Terminal styling and layout
-- **Go 1.24+** - High-performance compiled language
-- **Ed25519** - Cryptographic signatures for API authentication
 
 ### Project Structure
 ```
@@ -271,27 +244,7 @@ DazedTrader/
 └── README.md
 ```
 
-### API Integration
-- **Authentication**: Ed25519 signature-based authentication
-- **Portfolio Data**: `/api/v1/crypto/trading/accounts/`, `/holdings/`
-- **Market Data**: `/api/v1/crypto/marketdata/best_bid_ask/`
-- **Trading**: `/api/v1/crypto/trading/orders/` for buy/sell operations
-- **Rate Limiting**: Efficient polling with appropriate intervals
 
-## 🔒 Security Features
-
-### Credential Protection
-- **Local Storage Only**: Credentials stored in `~/.config/dazedtrader/`
-- **File Permissions**: 0600 (user read/write only)
-- **No Source Code Storage**: Zero risk of committing credentials
-- **Comprehensive .gitignore**: Protects all credential patterns
-- **Security Audit**: Built-in `check_security.sh` script
-
-### Authentication Security
-- **Ed25519 Signatures**: Industry-standard cryptographic authentication
-- **API Key Validation**: Real-time credential verification
-- **Session Management**: Secure token handling and expiration
-- **HTTPS Only**: All communication encrypted in transit
 
 ## ⚠️ Important Disclaimers
 
@@ -300,6 +253,7 @@ DazedTrader/
 - All credentials are handled securely and stored locally only
 - Review the source code before using with real accounts
 - Enable 2FA on your Robinhood account for additional security
+- User assumes all risks using this software
 
 ### Trading Risks
 - **All crypto trading involves significant financial risk**
@@ -314,50 +268,3 @@ DazedTrader/
 - Use in accordance with Robinhood's Terms of Service
 - Real money transactions - use responsibly
 
-## 🤝 Contributing
-
-Contributions are welcome! This project follows standard Go development practices:
-
-```bash
-# Fork and clone the repository
-git clone https://github.com/yourusername/DazedTrader.git
-cd DazedTrader
-
-# Create a feature branch
-git checkout -b feature/your-feature-name
-
-# Make changes and test
-go build && ./dazedtrader
-
-# Run security check
-./check_security.sh
-
-# Run tests
-go test ./...
-
-# Submit a pull request
-```
-
-### Development Guidelines
-- Follow Go conventions and use `go fmt`
-- Add tests for new functionality
-- Update documentation for user-facing changes
-- Test TUI components thoroughly
-- Never commit real credentials or API keys
-- Run security checks before submitting
-
-## 📝 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🔗 Related Projects
-
-- [Bubble Tea](https://github.com/charmbracelet/bubbletea) - TUI framework
-- [Lipgloss](https://github.com/charmbracelet/lipgloss) - Terminal styling
-- [Robinhood Crypto API](https://docs.robinhood.com/crypto/trading/) - Official API documentation
-
----
-
-**⚡ Built for crypto traders who value speed, security, and beautiful terminal interfaces ⚡**
-
-*Remember: Cryptocurrency trading is highly speculative and involves substantial risk of loss. Only trade with funds you can afford to lose completely.*
