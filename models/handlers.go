@@ -77,6 +77,8 @@ func (m *AppModel) handleKeyPress(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.handlePortfolioKeys(msg)
 	case StateTrading:
 		return m.handleTradingKeys(msg)
+	case StateAlgoTrading:
+		return m.handleAlgoTradingKeys(msg)
 	case StateMarketData:
 		return m.handleMarketDataKeys(msg)
 	case StateOrderHistory:
@@ -144,35 +146,39 @@ func (m *AppModel) handleMenuSelection() (tea.Model, tea.Cmd) {
 		if m.Authenticated {
 			m.State = StateTrading
 		}
-	case 2: // Market Data
+	case 2: // Algorithmic Trading
+		if m.Authenticated {
+			m.State = StateAlgoTrading
+		}
+	case 3: // Market Data
 		m.State = StateMarketData
 		if m.MarketData == nil {
 			return m, m.loadMarketDataCmd()
 		}
-	case 3: // Order History
+	case 4: // Order History
 		if m.Authenticated {
 			m.State = StateOrderHistory
 			if m.Portfolio == nil {
 				return m, m.loadCryptoPortfolioCmd()
 			}
 		}
-	case 4: // Crypto News
+	case 5: // Crypto News
 		m.State = StateNews
 		if m.NewsData == nil {
 			return m, m.loadNewsDataCmd()
 		}
-	case 5: // API Key Setup
+	case 6: // API Key Setup
 		if !m.Authenticated {
 			m.State = StateLogin
 			m.Error = ""
 		}
-	case 6: // Help
+	case 7: // Help
 		m.State = StateHelp
-	case 7: // Logout
+	case 8: // Logout
 		if m.Authenticated {
 			m.HandleLogout()
 		}
-	case 8: // Exit
+	case 9: // Exit
 		return m, tea.Quit
 	}
 	return m, nil
@@ -244,6 +250,67 @@ func (m *AppModel) handleMarketDataKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (m *AppModel) handleOrderHistoryKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Order history view-specific shortcuts can go here
+	return m, nil
+}
+
+func (m *AppModel) handleAlgoTradingKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.String() {
+	case "s":
+		// Start trading engine
+		if m.TradingEngine != nil && !m.TradingEngine.IsRunning() {
+			if err := m.TradingEngine.Start(); err != nil {
+				m.Error = fmt.Sprintf("Failed to start trading engine: %v", err)
+			} else {
+				m.updateAlgoTradingState()
+			}
+		}
+	case "t":
+		// Stop trading engine
+		if m.TradingEngine != nil && m.TradingEngine.IsRunning() {
+			if err := m.TradingEngine.Stop(); err != nil {
+				m.Error = fmt.Sprintf("Failed to stop trading engine: %v", err)
+			} else {
+				m.updateAlgoTradingState()
+			}
+		}
+	case "p":
+		// Pause/Resume trading engine
+		if m.TradingEngine != nil && m.TradingEngine.IsRunning() {
+			if m.TradingEngine.IsPaused() {
+				m.TradingEngine.Resume()
+			} else {
+				m.TradingEngine.Pause()
+			}
+			m.updateAlgoTradingState()
+		}
+	case "e":
+		// Emergency stop
+		if m.TradingEngine != nil {
+			if err := m.TradingEngine.EmergencyStop(); err != nil {
+				m.Error = fmt.Sprintf("Emergency stop failed: %v", err)
+			} else {
+				m.updateAlgoTradingState()
+			}
+		}
+	case "1", "2", "3", "4", "5":
+		// Start/stop individual strategies
+		strategyIndex, _ := strconv.Atoi(msg.String())
+		if strategyIndex > 0 && strategyIndex <= len(m.StrategyConfigs) {
+			config := m.StrategyConfigs[strategyIndex-1]
+			if m.TradingEngine != nil {
+				if _, exists := m.AlgoState.ActiveStrategies[config.Name]; exists {
+					// Stop strategy
+					m.TradingEngine.StopStrategy(config.Name)
+				} else {
+					// Start strategy
+					if config.Enabled {
+						m.TradingEngine.StartStrategy(config.Name, config)
+					}
+				}
+				m.updateAlgoTradingState()
+			}
+		}
+	}
 	return m, nil
 }
 

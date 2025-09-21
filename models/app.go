@@ -1,6 +1,8 @@
 package models
 
 import (
+	"dazedtrader/algo"
+	"dazedtrader/algo/strategies"
 	"dazedtrader/api"
 	"dazedtrader/auth"
 	"encoding/json"
@@ -42,6 +44,13 @@ type AppModel struct {
 	// Token price change cache
 	TokenPriceCache map[string]float64
 	TokenCacheTime  time.Time
+
+	// Algorithmic trading
+	TradingEngine   *algo.TradingEngine
+	AlgoConfig      *algo.EngineConfig
+	StrategyConfigs []algo.StrategyConfig
+	ConfigManager   *algo.ConfigManager
+	AlgoState       AlgoTradingState
 }
 
 type TradingForm struct {
@@ -127,6 +136,20 @@ type NewsArticle struct {
 	Symbols     []string // Related crypto symbols
 }
 
+// AlgoTradingState holds the current state of algorithmic trading
+type AlgoTradingState struct {
+	IsEngineRunning    bool
+	IsEnginePaused     bool
+	ActiveStrategies   map[string]algo.StrategyState
+	PerformanceMetrics *algo.PerformanceMetrics
+	TotalPnL           float64
+	DailyPnL           float64
+	ActiveTrades       int
+	TotalTrades        int
+	LastUpdate         time.Time
+	ErrorMessage       string
+}
+
 func NewAppModel() *AppModel {
 	// Try to load existing API key
 	apiKeyData, err := auth.LoadAPIKey()
@@ -146,11 +169,37 @@ func NewAppModel() *AppModel {
 		}
 	}
 
+	// Initialize algorithmic trading components
+	configManager := algo.NewConfigManager()
+	var algoConfig *algo.EngineConfig
+	var strategyConfigs []algo.StrategyConfig
+	var tradingEngine *algo.TradingEngine
+
+	if authenticated && cryptoClient != nil {
+		// Load algo trading configuration
+		if cfg, err := configManager.LoadEngineConfig(); err == nil {
+			algoConfig = cfg
+		}
+		if configs, err := configManager.LoadStrategyConfigs(); err == nil {
+			strategyConfigs = configs
+		}
+
+		// Initialize trading engine
+		if algoConfig != nil {
+			tradingEngine = algo.NewTradingEngine(cryptoClient, algoConfig)
+
+			// Register available strategies
+			tradingEngine.RegisterStrategy(strategies.NewMovingAverageStrategy("btc_ma", "BTC-USD"))
+			tradingEngine.RegisterStrategy(strategies.NewMomentumStrategy("eth_momentum", "ETH-USD"))
+		}
+	}
+
 	return &AppModel{
 		State: StateMenu,
 		Choices: []string{
 			"₿ Crypto Portfolio",
 			"📈 Crypto Trading",
+			"🤖 Algorithmic Trading",
 			"📊 Market Data",
 			"📋 Order History",
 			"📰 Crypto News",
@@ -159,10 +208,17 @@ func NewAppModel() *AppModel {
 			"🔓 Logout",
 			"🚪 Exit",
 		},
-		Cursor:        0,
-		Authenticated: authenticated,
-		Username:      username,
-		CryptoClient:  cryptoClient,
+		Cursor:          0,
+		Authenticated:   authenticated,
+		Username:        username,
+		CryptoClient:    cryptoClient,
+		TradingEngine:   tradingEngine,
+		AlgoConfig:      algoConfig,
+		StrategyConfigs: strategyConfigs,
+		ConfigManager:   configManager,
+		AlgoState: AlgoTradingState{
+			ActiveStrategies: make(map[string]algo.StrategyState),
+		},
 	}
 }
 
@@ -173,6 +229,7 @@ const (
 	StateDashboard
 	StatePortfolio
 	StateTrading
+	StateAlgoTrading
 	StateMarketData
 	StateOrderHistory
 	StateNews
@@ -2299,6 +2356,8 @@ func (m *AppModel) View() string {
 		return m.portfolioView()
 	case StateTrading:
 		return m.tradingView()
+	case StateAlgoTrading:
+		return m.algoTradingView()
 	case StateMarketData:
 		return m.marketDataView()
 	case StateOrderHistory:
@@ -2392,5 +2451,39 @@ func (m *AppModel) fetchTradingPriceCmd() tea.Cmd {
 			m.updateEstimatedCost()
 		}
 		return tradingPriceUpdatedMsg{err: nil}
+	}
+}
+
+// updateAlgoTradingState updates the algorithmic trading state
+func (m *AppModel) updateAlgoTradingState() {
+	if m.TradingEngine == nil {
+		return
+	}
+
+	m.AlgoState.IsEngineRunning = m.TradingEngine.IsRunning()
+	m.AlgoState.IsEnginePaused = m.TradingEngine.IsPaused()
+	m.AlgoState.ActiveStrategies = m.TradingEngine.GetActiveStrategies()
+	m.AlgoState.PerformanceMetrics = m.TradingEngine.GetMetrics()
+	m.AlgoState.LastUpdate = time.Now()
+
+	// Calculate summary statistics
+	totalTrades := 0
+	activeTrades := 0
+	totalPnL := 0.0
+
+	for _, state := range m.AlgoState.ActiveStrategies {
+		totalTrades += state.TradesCount
+		if state.Position.Quantity > 0 {
+			activeTrades++
+		}
+		totalPnL += state.PnL
+	}
+
+	m.AlgoState.TotalTrades = totalTrades
+	m.AlgoState.ActiveTrades = activeTrades
+	m.AlgoState.TotalPnL = totalPnL
+
+	if m.AlgoState.PerformanceMetrics != nil {
+		m.AlgoState.DailyPnL = m.AlgoState.PerformanceMetrics.DailyPnL
 	}
 }

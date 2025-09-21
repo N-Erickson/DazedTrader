@@ -495,6 +495,161 @@ func (m *AppModel) formatTokenIndicators(symbols []string) string {
 	return ""
 }
 
+// algoTradingView renders the algorithmic trading interface
+func (m *AppModel) algoTradingView() string {
+	if !m.Authenticated {
+		title := ui.HeaderStyle.Render("🤖 ALGORITHMIC TRADING")
+		content := "Please login first!"
+		footer := ui.InfoStyle.Render("Press 'Esc' to return to menu")
+		return fmt.Sprintf("%s\n%s\n%s", title, ui.MenuStyle.Render(content), footer)
+	}
+
+	title := ui.HeaderStyle.Render("🤖 ALGORITHMIC TRADING")
+	var content strings.Builder
+
+	if m.Error != "" {
+		content.WriteString(ui.NegativeStyle.Render("❌ " + m.Error + "\n\n"))
+	}
+
+	// Update state before rendering
+	m.updateAlgoTradingState()
+
+	// Engine Status
+	content.WriteString("🔧 **TRADING ENGINE STATUS**\n")
+	content.WriteString("══════════════════════════\n")
+
+	engineStatus := "🔴 Stopped"
+	if m.AlgoState.IsEngineRunning {
+		if m.AlgoState.IsEnginePaused {
+			engineStatus = "⏸️ Paused"
+		} else {
+			engineStatus = "🟢 Running"
+		}
+	}
+	content.WriteString(fmt.Sprintf("Status:          %s\n", engineStatus))
+	content.WriteString(fmt.Sprintf("Active Strategies: %d\n", len(m.AlgoState.ActiveStrategies)))
+	content.WriteString(fmt.Sprintf("Active Positions:  %d\n", m.AlgoState.ActiveTrades))
+	content.WriteString(fmt.Sprintf("Total Trades:      %d\n", m.AlgoState.TotalTrades))
+
+	// Performance Summary
+	content.WriteString("\n💰 **PERFORMANCE SUMMARY**\n")
+	content.WriteString("═════════════════════════\n")
+	content.WriteString(fmt.Sprintf("Total P&L:       %s\n", ui.FormatCurrency(m.AlgoState.TotalPnL)))
+	content.WriteString(fmt.Sprintf("Daily P&L:       %s\n", ui.FormatCurrency(m.AlgoState.DailyPnL)))
+
+	if m.AlgoState.PerformanceMetrics != nil {
+		metrics := m.AlgoState.PerformanceMetrics
+		content.WriteString(fmt.Sprintf("Win Rate:        %.1f%%\n", metrics.WinRate*100))
+		content.WriteString(fmt.Sprintf("Profit Factor:   %.2f\n", metrics.ProfitFactor))
+		content.WriteString(fmt.Sprintf("Max Drawdown:    %.1f%%\n", metrics.MaxDrawdownPercent))
+	}
+
+	// Strategy Status
+	content.WriteString("\n📊 **STRATEGY STATUS**\n")
+	content.WriteString("═══════════════════════\n")
+	content.WriteString("Strategy         Symbol    Status      Position    P&L         Trades\n")
+	content.WriteString("────────────────────────────────────────────────────────────────────\n")
+
+	if len(m.StrategyConfigs) == 0 {
+		content.WriteString("No strategies configured.\n")
+	} else {
+		for i, config := range m.StrategyConfigs {
+			state, isActive := m.AlgoState.ActiveStrategies[config.Name]
+
+			statusStr := "⚪ Disabled"
+			if config.Enabled {
+				if isActive {
+					statusStr = "🟢 Active"
+				} else {
+					statusStr = "🔴 Stopped"
+				}
+			}
+
+			positionStr := "None"
+			pnlStr := "$0.00"
+			tradesStr := "0"
+
+			if isActive {
+				if state.Position.Quantity > 0 {
+					positionStr = fmt.Sprintf("%.4f", state.Position.Quantity)
+				}
+				pnlStr = ui.FormatCurrency(state.PnL)
+				tradesStr = fmt.Sprintf("%d", state.TradesCount)
+			}
+
+			content.WriteString(fmt.Sprintf("%d. %-12s %-8s %-10s %-10s %-10s %s\n",
+				i+1,
+				config.Name[:min(12, len(config.Name))],
+				config.Symbol,
+				statusStr,
+				positionStr,
+				pnlStr,
+				tradesStr,
+			))
+		}
+	}
+
+	// Strategy Details (if any active)
+	if len(m.AlgoState.ActiveStrategies) > 0 {
+		content.WriteString("\n📈 **ACTIVE STRATEGY DETAILS**\n")
+		content.WriteString("════════════════════════════\n")
+
+		for name, state := range m.AlgoState.ActiveStrategies {
+			content.WriteString(fmt.Sprintf("\n**%s (%s)**\n", name, state.Symbol))
+			if state.LastSignal != nil {
+				content.WriteString(fmt.Sprintf("  Last Signal:   %s at $%.2f (%.1f%% confidence)\n",
+					strings.ToUpper(string(state.LastSignal.Type)),
+					state.LastSignal.Price,
+					state.LastSignal.Confidence*100))
+				content.WriteString(fmt.Sprintf("  Signal Time:   %s\n",
+					state.LastSignal.Timestamp.Format("15:04:05")))
+			}
+
+			if state.Position.Quantity > 0 {
+				content.WriteString(fmt.Sprintf("  Position:      %.4f @ $%.2f\n",
+					state.Position.Quantity,
+					state.Position.AveragePrice))
+				content.WriteString(fmt.Sprintf("  Market Value:  %s\n",
+					ui.FormatCurrency(state.Position.MarketValue)))
+				content.WriteString(fmt.Sprintf("  Unrealized:    %s\n",
+					ui.FormatCurrency(state.Position.UnrealizedPnL)))
+			}
+
+			// Strategy-specific metadata
+			if metadata := state.Metadata; len(metadata) > 0 {
+				content.WriteString("  Indicators:    ")
+				if shortMA, ok := metadata["short_ma"].(float64); ok {
+					content.WriteString(fmt.Sprintf("MA(5): $%.2f ", shortMA))
+				}
+				if longMA, ok := metadata["long_ma"].(float64); ok {
+					content.WriteString(fmt.Sprintf("MA(20): $%.2f ", longMA))
+				}
+				if momentum, ok := metadata["momentum_pct"].(float64); ok {
+					content.WriteString(fmt.Sprintf("Mom: %.2f%% ", momentum))
+				}
+				content.WriteString("\n")
+			}
+		}
+	}
+
+	// Controls
+	content.WriteString("\n🎮 **CONTROLS**\n")
+	content.WriteString("═════════════\n")
+	content.WriteString("S - Start Engine    T - Stop Engine     P - Pause/Resume\n")
+	content.WriteString("E - Emergency Stop   1-5 - Toggle Strategy\n")
+	content.WriteString("R - Refresh          Esc - Back to Menu\n")
+
+	// Last update time
+	if !m.AlgoState.LastUpdate.IsZero() {
+		content.WriteString(fmt.Sprintf("\nLast updated: %s\n",
+			m.AlgoState.LastUpdate.Format("15:04:05")))
+	}
+
+	footer := ui.InfoStyle.Render("⚠️  CAUTION: Algorithmic trading involves significant risk. Monitor closely!")
+
+	return fmt.Sprintf("%s\n%s\n%s", title, ui.MenuStyle.Render(content.String()), footer)
+}
+
 // getTokenPriceIndicator returns a formatted token with price change indicator
 func (m *AppModel) getTokenPriceIndicator(symbol string) string {
 	// Try to find price data from portfolio holdings first
