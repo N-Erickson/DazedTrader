@@ -209,32 +209,32 @@ func (ss *ScalpingStrategy) generateScalpingSignals(tick algo.PriceTick) []algo.
 		// INVERTED LOGIC: When trending up, prepare to sell. When trending down, prepare to buy.
 		if ss.shortMA > ss.longMA {
 			spread := (ss.shortMA - ss.longMA) / ss.longMA
-			fmt.Printf("[%s] Bullish trend: Short=%.6f > Long=%.6f, Spread=%.4f%% -> SELL SIGNAL\n", ss.name, ss.shortMA, ss.longMA, spread*100)
+			//REMOVED: fmt.Printf("[%s] Bullish trend: Short=%.6f > Long=%.6f, Spread=%.4f%% -> SELL SIGNAL\n", ss.name, ss.shortMA, ss.longMA, spread*100)
 			// Only trade if spread indicates profitable opportunity
 			minProfitableSpread := 0.008 // 0.8% minimum for profitable trade
 			if spread >= minProfitableSpread {
 				signal = algo.SignalSell  // CHANGED: was SignalBuy - sell at peak
 				confidence = 0.5 + (spread * 10)
-				fmt.Printf("[%s] PROFITABLE SELL: Spread %.4f%% >= %.1f%% (selling at trend peak)\n", ss.name, spread*100, minProfitableSpread*100)
+				//REMOVED: fmt.Printf("[%s] PROFITABLE SELL: Spread %.4f%% >= %.1f%% (selling at trend peak)\n", ss.name, spread*100, minProfitableSpread*100)
 			} else {
 				signal = algo.SignalHold
-				fmt.Printf("[%s] Not profitable: Spread %.4f%% < %.1f%% profit threshold\n", ss.name, spread*100, minProfitableSpread*100)
+				//REMOVED: fmt.Printf("[%s] Not profitable: Spread %.4f%% < %.1f%% profit threshold\n", ss.name, spread*100, minProfitableSpread*100)
 			}
 		} else if ss.shortMA < ss.longMA {
 			spread := (ss.longMA - ss.shortMA) / ss.longMA
-			fmt.Printf("[%s] Bearish trend: Short=%.6f < Long=%.6f, Spread=%.4f%% -> BUY SIGNAL\n", ss.name, ss.shortMA, ss.longMA, spread*100)
+			//REMOVED: fmt.Printf("[%s] Bearish trend: Short=%.6f < Long=%.6f, Spread=%.4f%% -> BUY SIGNAL\n", ss.name, ss.shortMA, ss.longMA, spread*100)
 			minProfitableSpread := 0.008 // 0.8% minimum for profitable trade
 			if spread >= minProfitableSpread {
 				signal = algo.SignalBuy   // CHANGED: was SignalSell - buy at bottom
 				confidence = 0.5 + (spread * 10)
-				fmt.Printf("[%s] PROFITABLE BUY: Spread %.4f%% >= %.1f%% (buying at trend bottom)\n", ss.name, spread*100, minProfitableSpread*100)
+				//REMOVED: fmt.Printf("[%s] PROFITABLE BUY: Spread %.4f%% >= %.1f%% (buying at trend bottom)\n", ss.name, spread*100, minProfitableSpread*100)
 			} else {
 				signal = algo.SignalHold
-				fmt.Printf("[%s] Not profitable: Spread %.4f%% < %.1f%% profit threshold\n", ss.name, spread*100, minProfitableSpread*100)
+				//REMOVED: fmt.Printf("[%s] Not profitable: Spread %.4f%% < %.1f%% profit threshold\n", ss.name, spread*100, minProfitableSpread*100)
 			}
 		} else {
 			signal = algo.SignalHold
-			fmt.Printf("[%s] MAs equal: Short=%.6f = Long=%.6f\n", ss.name, ss.shortMA, ss.longMA)
+			//REMOVED: fmt.Printf("[%s] MAs equal: Short=%.6f = Long=%.6f\n", ss.name, ss.shortMA, ss.longMA)
 		}
 	}
 
@@ -248,7 +248,7 @@ func (ss *ScalpingStrategy) generateScalpingSignals(tick algo.PriceTick) []algo.
 			quantity := ss.calculatePositionSize(tick.Price, confidence)
 
 			if quantity > 0 {
-				fmt.Printf("[%s] ✅ SIGNAL CREATED: %s %.8f at $%.2f (confidence: %.2f)\n", ss.name, signal, quantity, tick.Price, confidence)
+				//REMOVED: fmt.Printf("[%s] ✅ SIGNAL CREATED: %s %.8f at $%.2f (confidence: %.2f)\n", ss.name, signal, quantity, tick.Price, confidence)
 				signals = append(signals, algo.Signal{
 					Type:       signal,
 					Symbol:     ss.symbol,
@@ -268,7 +268,7 @@ func (ss *ScalpingStrategy) generateScalpingSignals(tick algo.PriceTick) []algo.
 				ss.lastSignal = signal
 				ss.lastSignalTime = tick.Timestamp
 			} else {
-				fmt.Printf("[%s] ❌ SIGNAL BLOCKED: Position size too small (%.8f)\n", ss.name, quantity)
+				//REMOVED: fmt.Printf("[%s] ❌ SIGNAL BLOCKED: Position size too small (%.8f)\n", ss.name, quantity)
 			}
 		}
 	}

@@ -289,18 +289,28 @@ func (sr *StrategyRunner) executeSellSignal(signal Signal) {
 	fmt.Println(msg)
 	log.Println(msg)
 
-	// Require minimum 0.5% profit to sell
-	minProfitPercent := 0.5
-	if profitPercent < minProfitPercent {
-		msg := fmt.Sprintf("[%s] BLOCKED: Insufficient profit %.2f%% < %.1f%% minimum",
-			sr.config.Name, profitPercent, minProfitPercent)
+	// STOP LOSS: Force sell if loss exceeds -2%
+	stopLossPercent := -2.0
+	if profitPercent <= stopLossPercent {
+		msg := fmt.Sprintf("[%s] STOP LOSS TRIGGERED: %.2f%% loss >= %.1f%% stop loss - FORCE SELLING",
+			sr.config.Name, profitPercent, stopLossPercent)
 		fmt.Println(msg)
 		log.Println(msg)
-		return
+		// Continue to execute sell - don't return
+	} else {
+		// Require minimum 0.5% profit to sell (unless stop loss)
+		minProfitPercent := 0.5
+		if profitPercent < minProfitPercent {
+			msg := fmt.Sprintf("[%s] BLOCKED: Insufficient profit %.2f%% < %.1f%% minimum",
+				sr.config.Name, profitPercent, minProfitPercent)
+			fmt.Println(msg)
+			log.Println(msg)
+			return
+		}
 	}
 
-	msg = fmt.Sprintf("[%s] PROFIT APPROVED: %.2f%% profit >= %.1f%% minimum",
-		sr.config.Name, profitPercent, minProfitPercent)
+	msg = fmt.Sprintf("[%s] PROFIT APPROVED: %.2f%% profit >= 0.5%% minimum",
+		sr.config.Name, profitPercent)
 	fmt.Println(msg)
 	log.Println(msg)
 
