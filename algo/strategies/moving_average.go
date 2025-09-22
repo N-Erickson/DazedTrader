@@ -133,35 +133,54 @@ func (mas *MovingAverageStrategy) generateSignals(tick algo.PriceTick) []algo.Si
 		return signals
 	}
 
-	// Check for crossover signals
+	// Calculate previous MAs to detect actual crossovers
+	var prevShortMA, prevLongMA float64
 	var signal algo.SignalType
 	confidence := 0.5 // Base confidence
 
-	// Bullish crossover: short MA crosses above long MA
-	if mas.shortMA > mas.longMA {
-		signal = algo.SignalBuy
-
-		// Increase confidence based on how strong the crossover is
-		spread := (mas.shortMA - mas.longMA) / mas.longMA
-		confidence = 0.5 + (spread * 10) // Scale the spread
-		if confidence > 1.0 {
-			confidence = 1.0
+	if len(mas.prices) > mas.longPeriod {
+		// Calculate previous short MA
+		shortSum := 0.0
+		for i := len(mas.prices) - mas.shortPeriod - 1; i < len(mas.prices) - 1; i++ {
+			shortSum += mas.prices[i]
 		}
-	} else if mas.shortMA < mas.longMA {
-		// Bearish crossover: short MA crosses below long MA
-		signal = algo.SignalSell
+		prevShortMA = shortSum / float64(mas.shortPeriod)
 
-		spread := (mas.longMA - mas.shortMA) / mas.longMA
-		confidence = 0.5 + (spread * 10)
-		if confidence > 1.0 {
-			confidence = 1.0
+		// Calculate previous long MA
+		longSum := 0.0
+		for i := len(mas.prices) - mas.longPeriod - 1; i < len(mas.prices) - 1; i++ {
+			longSum += mas.prices[i]
+		}
+		prevLongMA = longSum / float64(mas.longPeriod)
+	}
+
+	// Detect actual crossovers
+	if prevShortMA != 0 && prevLongMA != 0 {
+		// Bullish crossover: short MA crossed above long MA
+		if prevShortMA <= prevLongMA && mas.shortMA > mas.longMA {
+			signal = algo.SignalBuy
+			spread := (mas.shortMA - mas.longMA) / mas.longMA
+			confidence = 0.5 + (spread * 10)
+			if confidence > 1.0 {
+				confidence = 1.0
+			}
+		} else if prevShortMA >= prevLongMA && mas.shortMA < mas.longMA {
+			// Bearish crossover: short MA crossed below long MA
+			signal = algo.SignalSell
+			spread := (mas.longMA - mas.shortMA) / mas.longMA
+			confidence = 0.5 + (spread * 10)
+			if confidence > 1.0 {
+				confidence = 1.0
+			}
+		} else {
+			signal = algo.SignalHold
 		}
 	} else {
 		signal = algo.SignalHold
 	}
 
-	// Only generate signal if it's different from last signal and enough time has passed
-	if signal != mas.lastSignal && signal != algo.SignalHold {
+	// Only generate signal if it's not hold and enough time has passed
+	if signal != algo.SignalHold {
 		// Add cooldown period to prevent excessive trading
 		if time.Since(mas.lastSignalTime) >= time.Minute*5 {
 			// Calculate position size based on confidence and risk parameters

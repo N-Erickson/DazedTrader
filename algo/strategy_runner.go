@@ -276,9 +276,15 @@ func (sr *StrategyRunner) GetState() StrategyState {
 	sr.mu.RLock()
 	defer sr.mu.RUnlock()
 
-	// Make a copy to avoid race conditions
+	// Get current strategy state (includes metadata)
+	strategyState := sr.strategy.GetState()
+
+	// Update our state with strategy metadata
 	state := sr.state
 	state.Position = sr.position
+	state.Metadata = strategyState.Metadata
+	state.LastUpdateTime = time.Now()
+
 	return state
 }
 

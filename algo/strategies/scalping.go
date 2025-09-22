@@ -145,16 +145,39 @@ func (ss *ScalpingStrategy) generateScalpingSignals(tick algo.PriceTick) []algo.
 		}
 	}
 
-	// Bullish crossover: short MA crosses above long MA
-	if ss.shortMA > ss.longMA {
-		signal = algo.SignalBuy
-		spread := (ss.shortMA - ss.longMA) / ss.longMA
-		confidence = 0.6 + (spread * 15) // More aggressive scaling
-	} else if ss.shortMA < ss.longMA {
-		// Bearish crossover: short MA crosses below long MA
-		signal = algo.SignalSell
-		spread := (ss.longMA - ss.shortMA) / ss.longMA
-		confidence = 0.6 + (spread * 15)
+	// Calculate previous MAs to detect actual crossovers
+	var prevShortMA, prevLongMA float64
+	if len(ss.prices) > ss.longPeriod {
+		// Calculate previous short MA
+		shortSum := 0.0
+		for i := len(ss.prices) - ss.shortPeriod - 1; i < len(ss.prices) - 1; i++ {
+			shortSum += ss.prices[i]
+		}
+		prevShortMA = shortSum / float64(ss.shortPeriod)
+
+		// Calculate previous long MA
+		longSum := 0.0
+		for i := len(ss.prices) - ss.longPeriod - 1; i < len(ss.prices) - 1; i++ {
+			longSum += ss.prices[i]
+		}
+		prevLongMA = longSum / float64(ss.longPeriod)
+	}
+
+	// Detect actual crossovers
+	if prevShortMA != 0 && prevLongMA != 0 {
+		// Bullish crossover: short MA crossed above long MA
+		if prevShortMA <= prevLongMA && ss.shortMA > ss.longMA {
+			signal = algo.SignalBuy
+			spread := (ss.shortMA - ss.longMA) / ss.longMA
+			confidence = 0.6 + (spread * 15)
+		} else if prevShortMA >= prevLongMA && ss.shortMA < ss.longMA {
+			// Bearish crossover: short MA crossed below long MA
+			signal = algo.SignalSell
+			spread := (ss.longMA - ss.shortMA) / ss.longMA
+			confidence = 0.6 + (spread * 15)
+		} else {
+			signal = algo.SignalHold
+		}
 	} else {
 		signal = algo.SignalHold
 	}
@@ -163,8 +186,8 @@ func (ss *ScalpingStrategy) generateScalpingSignals(tick algo.PriceTick) []algo.
 		confidence = 1.0
 	}
 
-	// Very short cooldown for scalping (30 seconds instead of 5 minutes)
-	if signal != ss.lastSignal && signal != algo.SignalHold {
+	// Very short cooldown for scalping (15 seconds, not 30)
+	if signal != algo.SignalHold {
 		if time.Since(ss.lastSignalTime) >= time.Second*30 {
 			quantity := ss.calculatePositionSize(tick.Price, confidence)
 
