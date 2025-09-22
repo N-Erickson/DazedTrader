@@ -156,24 +156,35 @@ func (mas *MovingAverageStrategy) generateSignals(tick algo.PriceTick) []algo.Si
 
 	// Detect actual crossovers - TREND FOLLOWING with profit protection
 	if prevShortMA != 0 && prevLongMA != 0 {
+		// Minimum spread requirement to avoid false signals (0.1% minimum)
+		minSpreadPercent := 0.001
+
 		// Bullish crossover: Short MA crosses above Long MA = uptrend starting
 		if prevShortMA <= prevLongMA && mas.shortMA > mas.longMA {
-			signal = algo.SignalBuy
 			spread := (mas.shortMA - mas.longMA) / mas.longMA
-			confidence = 0.5 + (spread * 10)
-			if confidence > 1.0 {
-				confidence = 1.0
+			// Only signal if spread is significant enough
+			if spread >= minSpreadPercent {
+				signal = algo.SignalBuy
+				confidence = 0.5 + (spread * 10)
+				if confidence > 1.0 {
+					confidence = 1.0
+				}
+			} else {
+				signal = algo.SignalHold
 			}
-			//REMOVED: fmt.Printf("[%s] MA CROSSOVER: Bullish -> BUY (trend following)\n", mas.name)
 		} else if prevShortMA >= prevLongMA && mas.shortMA < mas.longMA {
 			// Bearish crossover: Short MA crosses below Long MA = downtrend starting
-			signal = algo.SignalSell
 			spread := (mas.longMA - mas.shortMA) / mas.longMA
-			confidence = 0.5 + (spread * 10)
-			if confidence > 1.0 {
-				confidence = 1.0
+			// Only signal if spread is significant enough
+			if spread >= minSpreadPercent {
+				signal = algo.SignalSell
+				confidence = 0.5 + (spread * 10)
+				if confidence > 1.0 {
+					confidence = 1.0
+				}
+			} else {
+				signal = algo.SignalHold
 			}
-			//REMOVED: fmt.Printf("[%s] MA CROSSOVER: Bearish -> SELL (with profit protection)\n", mas.name)
 		} else {
 			signal = algo.SignalHold
 		}

@@ -150,12 +150,10 @@ func (ss *ScalpingStrategy) generateScalpingSignals(tick algo.PriceTick) []algo.
 
 		if volatility < threshold {
 			msg := fmt.Sprintf("[%s] Volatility too low: %.8f < %.8f (entry threshold)", ss.name, volatility, threshold)
-			fmt.Println(msg)
 			ss.logToFile(msg)
 			return signals
 		}
 		msg := fmt.Sprintf("[%s] Volatility check passed: %.8f >= %.8f", ss.name, volatility, threshold)
-		fmt.Println(msg)
 		ss.logToFile(msg)
 	}
 
@@ -181,7 +179,6 @@ func (ss *ScalpingStrategy) generateScalpingSignals(tick algo.PriceTick) []algo.
 	if prevShortMA != 0 && prevLongMA != 0 {
 		msg := fmt.Sprintf("[%s] CROSSOVER CHECK: Prev(Short=%.6f, Long=%.6f) Current(Short=%.6f, Long=%.6f) Price=%.6f",
 			ss.name, prevShortMA, prevLongMA, ss.shortMA, ss.longMA, tick.Price)
-		fmt.Println(msg)
 		ss.logToFile(msg)
 
 		// TREND FOLLOWING with PROFIT VALIDATION
@@ -191,7 +188,6 @@ func (ss *ScalpingStrategy) generateScalpingSignals(tick algo.PriceTick) []algo.
 			spread := (ss.shortMA - ss.longMA) / ss.longMA
 			confidence = 0.6 + (spread * 15)
 			msg = fmt.Sprintf("[%s] 📈 BULLISH CROSSOVER -> BUY (riding uptrend)", ss.name)
-			fmt.Println(msg)
 			ss.logToFile(msg)
 		} else if prevShortMA >= prevLongMA && ss.shortMA < ss.longMA {
 			// Bearish crossover: Short MA crossed below long MA = downtrend starting
@@ -199,7 +195,6 @@ func (ss *ScalpingStrategy) generateScalpingSignals(tick algo.PriceTick) []algo.
 			spread := (ss.longMA - ss.shortMA) / ss.longMA
 			confidence = 0.6 + (spread * 15)
 			msg = fmt.Sprintf("[%s] 📉 BEARISH CROSSOVER -> SELL (riding downtrend)", ss.name)
-			fmt.Println(msg)
 			ss.logToFile(msg)
 		} else {
 			signal = algo.SignalHold
