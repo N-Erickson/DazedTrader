@@ -3,6 +3,7 @@ package algo
 import (
 	"context"
 	"dazedtrader/api"
+	"fmt"
 	"sync"
 	"time"
 )
@@ -100,7 +101,13 @@ func (pf *PriceFeed) GetLastTick() PriceTick {
 func (pf *PriceFeed) fetchAndBroadcastPrice() {
 	// Fetch current price from Robinhood API
 	quotes, err := pf.client.GetBestBidAsk([]string{pf.symbol})
-	if err != nil || len(quotes) == 0 {
+	if err != nil {
+		// Log API error but continue
+		fmt.Printf("Price feed error for %s: %v\n", pf.symbol, err)
+		return
+	}
+	if len(quotes) == 0 {
+		fmt.Printf("No quotes returned for %s\n", pf.symbol)
 		return
 	}
 
@@ -121,6 +128,9 @@ func (pf *PriceFeed) fetchAndBroadcastPrice() {
 	subscribers := make([]chan<- PriceTick, len(pf.subscribers))
 	copy(subscribers, pf.subscribers)
 	pf.mu.Unlock()
+
+	// Debug: Log successful price fetch
+	fmt.Printf("Price fetched for %s: $%.2f (subscribers: %d)\n", pf.symbol, tick.Price, len(subscribers))
 
 	// Broadcast to all subscribers
 	for _, sub := range subscribers {

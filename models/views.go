@@ -596,6 +596,11 @@ func (m *AppModel) algoTradingView() string {
 
 		for name, state := range m.AlgoState.ActiveStrategies {
 			content.WriteString(fmt.Sprintf("\n**%s (%s)**\n", name, state.Symbol))
+
+			// Debug: Show basic state info
+			content.WriteString(fmt.Sprintf("  Running:       %v\n", state.IsRunning))
+			content.WriteString(fmt.Sprintf("  Last Update:   %s\n", state.LastUpdateTime.Format("15:04:05")))
+			content.WriteString(fmt.Sprintf("  Metadata Keys: %d\n", len(state.Metadata)))
 			if state.LastSignal != nil {
 				content.WriteString(fmt.Sprintf("  Last Signal:   %s at $%.2f (%.1f%% confidence)\n",
 					strings.ToUpper(string(state.LastSignal.Type)),
@@ -618,14 +623,58 @@ func (m *AppModel) algoTradingView() string {
 			// Strategy-specific metadata
 			if metadata := state.Metadata; len(metadata) > 0 {
 				content.WriteString("  Indicators:    ")
+
+				// Debug: Show all metadata keys
+				content.WriteString("[")
+				keys := make([]string, 0, len(metadata))
+				for k := range metadata {
+					keys = append(keys, k)
+				}
+				for i, k := range keys {
+					if i > 0 {
+						content.WriteString(", ")
+					}
+					content.WriteString(k)
+				}
+				content.WriteString("] ")
+
+				// Moving Average strategy
 				if shortMA, ok := metadata["short_ma"].(float64); ok {
-					content.WriteString(fmt.Sprintf("MA(5): $%.2f ", shortMA))
+					shortPeriod := 10 // default
+					if sp, exists := metadata["short_period"].(int); exists {
+						shortPeriod = sp
+					}
+					content.WriteString(fmt.Sprintf("MA(%d): $%.2f ", shortPeriod, shortMA))
 				}
 				if longMA, ok := metadata["long_ma"].(float64); ok {
-					content.WriteString(fmt.Sprintf("MA(20): $%.2f ", longMA))
+					longPeriod := 30 // default
+					if lp, exists := metadata["long_period"].(int); exists {
+						longPeriod = lp
+					}
+					content.WriteString(fmt.Sprintf("MA(%d): $%.2f ", longPeriod, longMA))
 				}
+
+				// Show crossover status
+				if shortMA, shortOK := metadata["short_ma"].(float64); shortOK {
+					if longMA, longOK := metadata["long_ma"].(float64); longOK && shortMA > 0 && longMA > 0 {
+						if shortMA > longMA {
+							content.WriteString("📈BULLISH ")
+						} else {
+							content.WriteString("📉BEARISH ")
+						}
+						spread := ((shortMA - longMA) / longMA) * 100
+						content.WriteString(fmt.Sprintf("(%.3f%%) ", spread))
+					}
+				}
+
+				// Momentum strategy
 				if momentum, ok := metadata["momentum_pct"].(float64); ok {
 					content.WriteString(fmt.Sprintf("Mom: %.2f%% ", momentum))
+				}
+
+				// Show price count for debugging
+				if pricesCount, ok := metadata["prices_count"].(int); ok {
+					content.WriteString(fmt.Sprintf("[%d prices] ", pricesCount))
 				}
 				content.WriteString("\n")
 			}

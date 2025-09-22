@@ -255,7 +255,7 @@ func (m *AppModel) handleOrderHistoryKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 func (m *AppModel) handleAlgoTradingKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch msg.String() {
-	case "s":
+	case "s", "S":
 		// Start trading engine
 		if m.TradingEngine != nil && !m.TradingEngine.IsRunning() {
 			if err := m.TradingEngine.Start(); err != nil {
@@ -264,7 +264,7 @@ func (m *AppModel) handleAlgoTradingKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.updateAlgoTradingState()
 			}
 		}
-	case "t":
+	case "t", "T":
 		// Stop trading engine
 		if m.TradingEngine != nil && m.TradingEngine.IsRunning() {
 			if err := m.TradingEngine.Stop(); err != nil {
@@ -273,7 +273,7 @@ func (m *AppModel) handleAlgoTradingKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				m.updateAlgoTradingState()
 			}
 		}
-	case "p":
+	case "p", "P":
 		// Pause/Resume trading engine
 		if m.TradingEngine != nil && m.TradingEngine.IsRunning() {
 			if m.TradingEngine.IsPaused() {
@@ -283,7 +283,7 @@ func (m *AppModel) handleAlgoTradingKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			m.updateAlgoTradingState()
 		}
-	case "e":
+	case "e", "E":
 		// Emergency stop
 		if m.TradingEngine != nil {
 			if err := m.TradingEngine.EmergencyStop(); err != nil {
@@ -302,14 +302,18 @@ func (m *AppModel) handleAlgoTradingKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 					// Stop strategy
 					m.TradingEngine.StopStrategy(config.Name)
 				} else {
-					// Start strategy
-					if config.Enabled {
-						m.TradingEngine.StartStrategy(config.Name, config)
+					// Start strategy - toggle enabled state first
+					m.StrategyConfigs[strategyIndex-1].Enabled = !m.StrategyConfigs[strategyIndex-1].Enabled
+					if m.StrategyConfigs[strategyIndex-1].Enabled {
+						m.TradingEngine.StartStrategy(config.Name, m.StrategyConfigs[strategyIndex-1])
 					}
 				}
 				m.updateAlgoTradingState()
 			}
 		}
+	case "r", "R":
+		// Refresh algo trading status
+		m.updateAlgoTradingState()
 	}
 	return m, nil
 }

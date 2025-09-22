@@ -188,9 +188,27 @@ func NewAppModel() *AppModel {
 		if algoConfig != nil {
 			tradingEngine = algo.NewTradingEngine(cryptoClient, algoConfig)
 
-			// Register available strategies
-			tradingEngine.RegisterStrategy(strategies.NewMovingAverageStrategy("btc_ma", "BTC-USD"))
-			tradingEngine.RegisterStrategy(strategies.NewMomentumStrategy("eth_momentum", "ETH-USD"))
+			// Register available strategies dynamically based on config files
+			strategyConfigs, err := configManager.LoadStrategyConfigs()
+			if err == nil {
+				for _, config := range strategyConfigs {
+					var strategy algo.Strategy
+
+					// Determine strategy type based on config name or parameters
+					if strings.Contains(config.Name, "momentum") {
+						strategy = strategies.NewMomentumStrategy(config.Name, config.Symbol)
+					} else if strings.Contains(config.Name, "scalping") {
+						strategy = strategies.NewScalpingStrategy(config.Name, config.Symbol)
+					} else {
+						// Default to moving average strategy
+						strategy = strategies.NewMovingAverageStrategy(config.Name, config.Symbol)
+					}
+
+					if strategy != nil {
+						tradingEngine.RegisterStrategy(strategy)
+					}
+				}
+			}
 		}
 	}
 

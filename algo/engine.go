@@ -195,7 +195,15 @@ func (e *TradingEngine) StartStrategy(name string, config StrategyConfig) error 
 	symbol := config.Symbol
 	if _, exists := e.priceFeeds[symbol]; !exists {
 		e.priceFeeds[symbol] = NewPriceFeed(symbol, e.client, e.config.PriceUpdateInterval)
+		// Start the price feed immediately if engine is running
+		if e.isRunning {
+			go e.priceFeeds[symbol].Start(context.Background())
+		}
 	}
+
+	// Connect price feed to strategy runner
+	priceFeed := e.priceFeeds[symbol]
+	go e.feedPricesToStrategy(priceFeed, runner)
 
 	// Start the strategy runner
 	go runner.Run(context.Background())
@@ -228,6 +236,19 @@ func (e *TradingEngine) Start() error {
 		return fmt.Errorf("trading engine is already running")
 	}
 
+	// Recreate channels if they were closed
+	select {
+	case <-e.stopChan:
+		e.stopChan = make(chan struct{})
+	default:
+	}
+
+	select {
+	case <-e.emergencyStop:
+		e.emergencyStop = make(chan struct{})
+	default:
+	}
+
 	e.isRunning = true
 	e.isPaused = false
 
@@ -252,9 +273,10 @@ func (e *TradingEngine) Stop() error {
 		return nil
 	}
 
-	// Stop all active strategies
-	for name := range e.activeStrategies {
-		e.StopStrategy(name)
+	// Stop all active strategies (without calling StopStrategy to avoid deadlock)
+	for name, runner := range e.activeStrategies {
+		runner.Stop()
+		delete(e.activeStrategies, name)
 	}
 
 	// Stop price feeds
@@ -263,10 +285,37 @@ func (e *TradingEngine) Stop() error {
 	}
 
 	// Signal shutdown
-	close(e.stopChan)
+	select {
+	case <-e.stopChan:
+		// Already closed
+	default:
+		close(e.stopChan)
+	}
 	e.isRunning = false
 
 	return nil
+}
+
+// feedPricesToStrategy feeds price updates from a price feed to a strategy runner
+func (e *TradingEngine) feedPricesToStrategy(priceFeed *PriceFeed, runner *StrategyRunner) {
+	// Create a channel to receive price updates
+	priceChan := make(chan PriceTick, 100)
+
+	// Subscribe to the price feed
+	priceFeed.Subscribe(priceChan)
+	defer priceFeed.Unsubscribe(priceChan)
+
+	for {
+		select {
+		case <-e.stopChan:
+			return
+		case <-e.emergencyStop:
+			return
+		case tick := <-priceChan:
+			// Forward the tick to the strategy runner
+			runner.ProcessPriceTick(tick)
+		}
+	}
 }
 
 // EmergencyStop immediately stops all trading activity
@@ -274,8 +323,16 @@ func (e *TradingEngine) EmergencyStop() error {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 
-	// Signal emergency stop
-	close(e.emergencyStop)
+	// Only close channel if still running
+	if e.isRunning {
+		// Signal emergency stop
+		select {
+		case <-e.emergencyStop:
+			// Already closed
+		default:
+			close(e.emergencyStop)
+		}
+	}
 
 	// Cancel all pending orders
 	e.orderManager.CancelAllOrders()

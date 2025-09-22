@@ -87,14 +87,24 @@ type PaginatedResponse[T any] struct {
 	Results  []T     `json:"results"`
 }
 
-type BestBidAsk struct {
+type BestBidAskRaw struct {
 	Symbol                    string  `json:"symbol"`
-	Price                     float64 `json:"price"`
-	BidPrice                  float64 `json:"bid_inclusive_of_sell_spread"`
-	SellSpread               float64 `json:"sell_spread"`
-	AskPrice                  float64 `json:"ask_inclusive_of_buy_spread"`
-	BuySpread                float64 `json:"buy_spread"`
+	PriceStr                  string  `json:"price"`
+	BidPriceStr               string  `json:"bid_inclusive_of_sell_spread"`
+	SellSpreadStr            string  `json:"sell_spread"`
+	AskPriceStr               string  `json:"ask_inclusive_of_buy_spread"`
+	BuySpreadStr             string  `json:"buy_spread"`
 	Timestamp                string  `json:"timestamp"`
+}
+
+type BestBidAsk struct {
+	Symbol       string
+	Price        float64
+	BidPrice     float64
+	SellSpread   float64
+	AskPrice     float64
+	BuySpread    float64
+	Timestamp    string
 }
 
 type CryptoOrder struct {
@@ -283,12 +293,32 @@ func (c *CryptoClient) GetBestBidAsk(symbols []string) ([]BestBidAsk, error) {
 		return nil, fmt.Errorf("failed to read response body: %v", err)
 	}
 
-	var response PaginatedResponse[BestBidAsk]
-	if err := json.Unmarshal(body, &response); err != nil {
+	var rawResponse PaginatedResponse[BestBidAskRaw]
+	if err := json.Unmarshal(body, &rawResponse); err != nil {
 		return nil, fmt.Errorf("failed to parse JSON response: %v. Response body: %s", err, string(body))
 	}
 
-	return response.Results, nil
+	// Convert raw strings to float64
+	results := make([]BestBidAsk, len(rawResponse.Results))
+	for i, raw := range rawResponse.Results {
+		price, _ := strconv.ParseFloat(raw.PriceStr, 64)
+		bidPrice, _ := strconv.ParseFloat(raw.BidPriceStr, 64)
+		askPrice, _ := strconv.ParseFloat(raw.AskPriceStr, 64)
+		sellSpread, _ := strconv.ParseFloat(raw.SellSpreadStr, 64)
+		buySpread, _ := strconv.ParseFloat(raw.BuySpreadStr, 64)
+
+		results[i] = BestBidAsk{
+			Symbol:     raw.Symbol,
+			Price:      price,
+			BidPrice:   bidPrice,
+			AskPrice:   askPrice,
+			SellSpread: sellSpread,
+			BuySpread:  buySpread,
+			Timestamp:  raw.Timestamp,
+		}
+	}
+
+	return results, nil
 }
 
 // GetCryptoOrders retrieves crypto order history

@@ -204,8 +204,8 @@ func (mas *MovingAverageStrategy) calculatePositionSize(price, confidence float6
 	// Convert to quantity
 	quantity := scaledPositionValue / price
 
-	// Apply minimum position size filter
-	minPositionValue := 10.0 // Minimum $10 position
+	// Apply minimum position size filter (reduced for ultra conservative mode)
+	minPositionValue := 5.0 // Minimum $5 position (was $10)
 	if quantity*price < minPositionValue {
 		return 0
 	}
