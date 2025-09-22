@@ -2,6 +2,7 @@ package strategies
 
 import (
 	"dazedtrader/algo"
+	"fmt"
 	"math"
 	"time"
 )
@@ -165,25 +166,26 @@ func (ms *MomentumStrategy) generateSignals(tick algo.PriceTick) []algo.Signal {
 	var signal algo.SignalType
 	confidence := 0.5
 
-	// Check for strong positive momentum
+	// MOMENTUM TREND FOLLOWING with profit protection
 	if ms.momentum > ms.momentumThreshold {
-		// Additional volume confirmation
+		// Strong positive momentum = uptrend = BUY
 		if tick.Volume > ms.avgVolume*ms.volumeMultiplier {
 			signal = algo.SignalBuy
-			// Higher momentum = higher confidence
-			confidence = 0.5 + (ms.momentum * 5) // Scale momentum
+			confidence = 0.5 + (ms.momentum * 5)
 			if confidence > 1.0 {
 				confidence = 1.0
 			}
+			fmt.Printf("[%s] 📈 STRONG POSITIVE MOMENTUM -> BUY (riding momentum up)\n", ms.name)
 		}
 	} else if ms.momentum < -ms.momentumThreshold {
-		// Strong negative momentum
+		// Strong negative momentum = downtrend = SELL (with profit protection)
 		if tick.Volume > ms.avgVolume*ms.volumeMultiplier {
 			signal = algo.SignalSell
 			confidence = 0.5 + (math.Abs(ms.momentum) * 5)
 			if confidence > 1.0 {
 				confidence = 1.0
 			}
+			fmt.Printf("[%s] 📉 STRONG NEGATIVE MOMENTUM -> SELL (with profit protection)\n", ms.name)
 		}
 	} else {
 		signal = algo.SignalHold

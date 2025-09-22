@@ -2,6 +2,8 @@ package algo
 
 import (
 	"context"
+	"fmt"
+	"log"
 	"sync"
 	"time"
 )
@@ -143,18 +145,37 @@ func (sr *StrategyRunner) processPriceTick(tick PriceTick) {
 
 // processSignal handles a trading signal
 func (sr *StrategyRunner) processSignal(signal Signal) {
+	msg := fmt.Sprintf("[%s] Processing %s signal: %.8f %s at $%.6f", sr.config.Name, signal.Type, signal.Quantity, signal.Symbol, signal.Price)
+	fmt.Println(msg)
+	log.Println(msg)
+
 	// Apply risk management checks
 	if !sr.riskManager.ValidateSignal(signal, sr.config.RiskLimits, sr.state) {
+		msg := fmt.Sprintf("[%s] BLOCKED: Risk management rejected signal", sr.config.Name)
+		fmt.Println(msg)
+		log.Println(msg)
 		return
 	}
+	msg = fmt.Sprintf("[%s] Risk management check passed", sr.config.Name)
+	fmt.Println(msg)
+	log.Println(msg)
 
 	// Check daily trade limits
 	todayTrades := sr.getTodayTradeCount()
 	if todayTrades >= sr.config.RiskLimits.MaxDailyTrades {
+		msg := fmt.Sprintf("[%s] BLOCKED: Daily trade limit reached (%d/%d)", sr.config.Name, todayTrades, sr.config.RiskLimits.MaxDailyTrades)
+		fmt.Println(msg)
+		log.Println(msg)
 		return
 	}
+	msg = fmt.Sprintf("[%s] Daily trade limit check passed (%d/%d)", sr.config.Name, todayTrades, sr.config.RiskLimits.MaxDailyTrades)
+	fmt.Println(msg)
+	log.Println(msg)
 
 	// Execute the signal
+	msg = fmt.Sprintf("[%s] Executing signal...", sr.config.Name)
+	fmt.Println(msg)
+	log.Println(msg)
 	sr.executeSignal(signal)
 	sr.state.LastSignal = &signal
 }
@@ -173,14 +194,46 @@ func (sr *StrategyRunner) executeSignal(signal Signal) {
 
 // executeBuySignal executes a buy signal
 func (sr *StrategyRunner) executeBuySignal(signal Signal) {
+	msg := fmt.Sprintf("[%s] Executing BUY signal", sr.config.Name)
+	fmt.Println(msg)
+	log.Println(msg)
+
+	// POSITION CHECK: Only buy if we don't already have a position
+	if sr.position.Quantity > 0 {
+		msg := fmt.Sprintf("[%s] BLOCKED: Already have position %.8f DOGE - cannot buy more", sr.config.Name, sr.position.Quantity)
+		fmt.Println(msg)
+		log.Println(msg)
+		return
+	}
+
+	msg = fmt.Sprintf("[%s] POSITION CHECK PASSED: No existing position, safe to buy", sr.config.Name)
+	fmt.Println(msg)
+	log.Println(msg)
+
 	// Calculate position size based on risk limits
 	maxPositionSize := sr.config.RiskLimits.MaxPositionSize
 	quantity := signal.Quantity
+	msg = fmt.Sprintf("[%s] Original quantity: %.8f, Max position: $%.2f", sr.config.Name, quantity, maxPositionSize)
+	fmt.Println(msg)
+	log.Println(msg)
 
 	// Adjust quantity if it would exceed max position size
 	if quantity*signal.Price > maxPositionSize {
 		quantity = maxPositionSize / signal.Price
+		msg = fmt.Sprintf("[%s] Adjusted quantity to: %.8f (to fit max position size)", sr.config.Name, quantity)
+		fmt.Println(msg)
+		log.Println(msg)
 	}
+
+	// Log adjusted quantity
+	msg = fmt.Sprintf("[%s] Final quantity after adjustments: %.8f", sr.config.Name, quantity)
+	fmt.Println(msg)
+	log.Println(msg)
+
+	orderValue := quantity * signal.Price
+	msg = fmt.Sprintf("[%s] Order value: %.8f * $%.6f = $%.2f", sr.config.Name, quantity, signal.Price, orderValue)
+	fmt.Println(msg)
+	log.Println(msg)
 
 	// Submit buy order
 	order := OrderRequest{
@@ -190,11 +243,20 @@ func (sr *StrategyRunner) executeBuySignal(signal Signal) {
 		Quantity: quantity,
 	}
 
+	msg = fmt.Sprintf("[%s] Submitting order to API: %s %.8f %s", sr.config.Name, order.Side, order.Quantity, order.Symbol)
+	fmt.Println(msg)
+	log.Println(msg)
+
 	trade, err := sr.orderManager.SubmitOrder(order)
 	if err != nil {
-		// Log error
+		msg = fmt.Sprintf("[%s] ORDER FAILED: %v", sr.config.Name, err)
+		fmt.Println(msg)
+		log.Println(msg)
 		return
 	}
+	msg = fmt.Sprintf("[%s] ORDER SUCCESS: Trade ID %s", sr.config.Name, trade.ID)
+	fmt.Println(msg)
+	log.Println(msg)
 
 	// Update position
 	sr.updatePositionFromTrade(trade)
@@ -204,10 +266,43 @@ func (sr *StrategyRunner) executeBuySignal(signal Signal) {
 
 // executeSellSignal executes a sell signal
 func (sr *StrategyRunner) executeSellSignal(signal Signal) {
+	msg := fmt.Sprintf("[%s] Executing SELL signal - Current position: %.8f at cost $%.6f", sr.config.Name, sr.position.Quantity, sr.position.AveragePrice)
+	fmt.Println(msg)
+	log.Println(msg)
+
 	// Only sell if we have a position
 	if sr.position.Quantity <= 0 {
+		msg := fmt.Sprintf("[%s] BLOCKED: No position to sell (%.8f)", sr.config.Name, sr.position.Quantity)
+		fmt.Println(msg)
+		log.Println(msg)
 		return
 	}
+
+	// PROFIT PROTECTION: Only sell if we can make a profit
+	currentValue := sr.position.Quantity * signal.Price
+	costBasis := sr.position.Quantity * sr.position.AveragePrice
+	potentialProfit := currentValue - costBasis
+	profitPercent := (potentialProfit / costBasis) * 100
+
+	msg = fmt.Sprintf("[%s] PROFIT CHECK: Cost=$%.2f Current=$%.2f Profit=$%.2f (%.2f%%)",
+		sr.config.Name, costBasis, currentValue, potentialProfit, profitPercent)
+	fmt.Println(msg)
+	log.Println(msg)
+
+	// Require minimum 0.5% profit to sell
+	minProfitPercent := 0.5
+	if profitPercent < minProfitPercent {
+		msg := fmt.Sprintf("[%s] BLOCKED: Insufficient profit %.2f%% < %.1f%% minimum",
+			sr.config.Name, profitPercent, minProfitPercent)
+		fmt.Println(msg)
+		log.Println(msg)
+		return
+	}
+
+	msg = fmt.Sprintf("[%s] PROFIT APPROVED: %.2f%% profit >= %.1f%% minimum",
+		sr.config.Name, profitPercent, minProfitPercent)
+	fmt.Println(msg)
+	log.Println(msg)
 
 	// Determine quantity to sell
 	quantity := signal.Quantity

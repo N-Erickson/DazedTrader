@@ -304,6 +304,14 @@ func (m *AppModel) handleAlgoTradingKeys(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 				} else {
 					// Start strategy - toggle enabled state first
 					m.StrategyConfigs[strategyIndex-1].Enabled = !m.StrategyConfigs[strategyIndex-1].Enabled
+
+					// Save the updated config to disk
+					if m.ConfigManager != nil {
+						if err := m.ConfigManager.SaveStrategyConfig(&m.StrategyConfigs[strategyIndex-1]); err != nil {
+							m.Error = fmt.Sprintf("Failed to save strategy config: %v", err)
+						}
+					}
+
 					if m.StrategyConfigs[strategyIndex-1].Enabled {
 						m.TradingEngine.StartStrategy(config.Name, m.StrategyConfigs[strategyIndex-1])
 					}

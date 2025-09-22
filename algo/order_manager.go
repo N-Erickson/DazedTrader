@@ -3,6 +3,7 @@ package algo
 import (
 	"dazedtrader/api"
 	"fmt"
+	"math"
 	"sync"
 	"time"
 
@@ -46,6 +47,29 @@ type OrderRecord struct {
 	ErrorMsg     string    `json:"error_msg,omitempty"`
 }
 
+// getAssetPrecision returns the required precision for a given asset
+func getAssetPrecision(symbol string) float64 {
+	// Precision requirements based on Robinhood API documentation
+	switch symbol {
+	case "DOGE-USD":
+		return 0.01 // 2 decimal places
+	case "BTC-USD":
+		return 0.00000001 // 8 decimal places (1 satoshi)
+	case "ETH-USD":
+		return 0.000001 // 6 decimal places
+	case "LTC-USD":
+		return 0.0001 // 4 decimal places
+	default:
+		return 0.00000001 // Default to 8 decimal places for safety
+	}
+}
+
+// roundToAssetPrecision rounds a quantity to the required precision for the asset
+func roundToAssetPrecision(quantity float64, symbol string) float64 {
+	precision := getAssetPrecision(symbol)
+	return math.Round(quantity/precision) * precision
+}
+
 // NewOrderManager creates a new order manager
 func NewOrderManager(client *api.CryptoClient, config *EngineConfig) *OrderManager {
 	return &OrderManager{
@@ -61,16 +85,24 @@ func (om *OrderManager) SubmitOrder(request OrderRequest) (Trade, error) {
 	om.mu.Lock()
 	defer om.mu.Unlock()
 
+	// Round quantity to the required precision for the asset
+	roundedQuantity := roundToAssetPrecision(request.Quantity, request.Symbol)
+
+	// Log quantity adjustment if needed
+	if roundedQuantity != request.Quantity {
+		fmt.Printf("Rounded quantity %.8f -> %.8f for %s\n", request.Quantity, roundedQuantity, request.Symbol)
+	}
+
 	// Generate client order ID
 	clientID := uuid.New().String()
 
-	// Create order record
+	// Create order record (use rounded quantity)
 	record := &OrderRecord{
 		ClientID:   clientID,
 		Symbol:     request.Symbol,
 		Side:       request.Side,
 		Type:       request.Type,
-		Quantity:   request.Quantity,
+		Quantity:   roundedQuantity,
 		Price:      request.Price,
 		Status:     "pending",
 		SubmitTime: time.Now(),
@@ -86,7 +118,7 @@ func (om *OrderManager) SubmitOrder(request OrderRequest) (Trade, error) {
 			request.Side,
 			"market",
 			request.Symbol,
-			fmt.Sprintf("%.8f", request.Quantity),
+			fmt.Sprintf("%.8f", roundedQuantity),
 			"",
 		)
 	} else {
@@ -95,7 +127,7 @@ func (om *OrderManager) SubmitOrder(request OrderRequest) (Trade, error) {
 			request.Side,
 			"limit",
 			request.Symbol,
-			fmt.Sprintf("%.8f", request.Quantity),
+			fmt.Sprintf("%.8f", roundedQuantity),
 			fmt.Sprintf("%.2f", request.Price),
 		)
 	}

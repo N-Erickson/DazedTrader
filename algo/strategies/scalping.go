@@ -3,6 +3,8 @@ package strategies
 import (
 	"dazedtrader/algo"
 	"fmt"
+	"log"
+	"os"
 	"time"
 )
 
@@ -134,15 +136,27 @@ func (ss *ScalpingStrategy) generateScalpingSignals(tick algo.PriceTick) []algo.
 	var signal algo.SignalType
 	confidence := 0.6 // Higher base confidence for scalping
 
-	// Calculate price volatility
+	// Calculate price volatility - more lenient for first position
 	if len(ss.prices) >= 5 {
 		recentPrices := ss.prices[len(ss.prices)-5:]
 		volatility := ss.calculateVolatility(recentPrices)
 
-		// Only trade if volatility is above threshold (ensures movement)
-		if volatility < ss.volatilityThreshold {
+		// Use lower threshold if we don't have a position (need to enter market)
+		hasPosition := false // TODO: get actual position from runner
+		threshold := ss.volatilityThreshold
+		if !hasPosition {
+			threshold = ss.volatilityThreshold * 0.1 // 10x more permissive for first entry
+		}
+
+		if volatility < threshold {
+			msg := fmt.Sprintf("[%s] Volatility too low: %.8f < %.8f (entry threshold)", ss.name, volatility, threshold)
+			fmt.Println(msg)
+			ss.logToFile(msg)
 			return signals
 		}
+		msg := fmt.Sprintf("[%s] Volatility check passed: %.8f >= %.8f", ss.name, volatility, threshold)
+		fmt.Println(msg)
+		ss.logToFile(msg)
 	}
 
 	// Calculate previous MAs to detect actual crossovers
@@ -165,21 +179,63 @@ func (ss *ScalpingStrategy) generateScalpingSignals(tick algo.PriceTick) []algo.
 
 	// Detect actual crossovers
 	if prevShortMA != 0 && prevLongMA != 0 {
-		// Bullish crossover: short MA crossed above long MA
+		msg := fmt.Sprintf("[%s] CROSSOVER CHECK: Prev(Short=%.6f, Long=%.6f) Current(Short=%.6f, Long=%.6f) Price=%.6f",
+			ss.name, prevShortMA, prevLongMA, ss.shortMA, ss.longMA, tick.Price)
+		fmt.Println(msg)
+		ss.logToFile(msg)
+
+		// TREND FOLLOWING with PROFIT VALIDATION
 		if prevShortMA <= prevLongMA && ss.shortMA > ss.longMA {
+			// Bullish crossover: Short MA crossed above long MA = uptrend starting
 			signal = algo.SignalBuy
 			spread := (ss.shortMA - ss.longMA) / ss.longMA
 			confidence = 0.6 + (spread * 15)
+			msg = fmt.Sprintf("[%s] 📈 BULLISH CROSSOVER -> BUY (riding uptrend)", ss.name)
+			fmt.Println(msg)
+			ss.logToFile(msg)
 		} else if prevShortMA >= prevLongMA && ss.shortMA < ss.longMA {
-			// Bearish crossover: short MA crossed below long MA
+			// Bearish crossover: Short MA crossed below long MA = downtrend starting
 			signal = algo.SignalSell
 			spread := (ss.longMA - ss.shortMA) / ss.longMA
 			confidence = 0.6 + (spread * 15)
+			msg = fmt.Sprintf("[%s] 📉 BEARISH CROSSOVER -> SELL (riding downtrend)", ss.name)
+			fmt.Println(msg)
+			ss.logToFile(msg)
 		} else {
 			signal = algo.SignalHold
 		}
 	} else {
-		signal = algo.SignalHold
+		// If no previous data for crossover detection, use trend strength
+		// INVERTED LOGIC: When trending up, prepare to sell. When trending down, prepare to buy.
+		if ss.shortMA > ss.longMA {
+			spread := (ss.shortMA - ss.longMA) / ss.longMA
+			fmt.Printf("[%s] Bullish trend: Short=%.6f > Long=%.6f, Spread=%.4f%% -> SELL SIGNAL\n", ss.name, ss.shortMA, ss.longMA, spread*100)
+			// Only trade if spread indicates profitable opportunity
+			minProfitableSpread := 0.008 // 0.8% minimum for profitable trade
+			if spread >= minProfitableSpread {
+				signal = algo.SignalSell  // CHANGED: was SignalBuy - sell at peak
+				confidence = 0.5 + (spread * 10)
+				fmt.Printf("[%s] PROFITABLE SELL: Spread %.4f%% >= %.1f%% (selling at trend peak)\n", ss.name, spread*100, minProfitableSpread*100)
+			} else {
+				signal = algo.SignalHold
+				fmt.Printf("[%s] Not profitable: Spread %.4f%% < %.1f%% profit threshold\n", ss.name, spread*100, minProfitableSpread*100)
+			}
+		} else if ss.shortMA < ss.longMA {
+			spread := (ss.longMA - ss.shortMA) / ss.longMA
+			fmt.Printf("[%s] Bearish trend: Short=%.6f < Long=%.6f, Spread=%.4f%% -> BUY SIGNAL\n", ss.name, ss.shortMA, ss.longMA, spread*100)
+			minProfitableSpread := 0.008 // 0.8% minimum for profitable trade
+			if spread >= minProfitableSpread {
+				signal = algo.SignalBuy   // CHANGED: was SignalSell - buy at bottom
+				confidence = 0.5 + (spread * 10)
+				fmt.Printf("[%s] PROFITABLE BUY: Spread %.4f%% >= %.1f%% (buying at trend bottom)\n", ss.name, spread*100, minProfitableSpread*100)
+			} else {
+				signal = algo.SignalHold
+				fmt.Printf("[%s] Not profitable: Spread %.4f%% < %.1f%% profit threshold\n", ss.name, spread*100, minProfitableSpread*100)
+			}
+		} else {
+			signal = algo.SignalHold
+			fmt.Printf("[%s] MAs equal: Short=%.6f = Long=%.6f\n", ss.name, ss.shortMA, ss.longMA)
+		}
 	}
 
 	if confidence > 1.0 {
@@ -192,6 +248,7 @@ func (ss *ScalpingStrategy) generateScalpingSignals(tick algo.PriceTick) []algo.
 			quantity := ss.calculatePositionSize(tick.Price, confidence)
 
 			if quantity > 0 {
+				fmt.Printf("[%s] ✅ SIGNAL CREATED: %s %.8f at $%.2f (confidence: %.2f)\n", ss.name, signal, quantity, tick.Price, confidence)
 				signals = append(signals, algo.Signal{
 					Type:       signal,
 					Symbol:     ss.symbol,
@@ -210,6 +267,8 @@ func (ss *ScalpingStrategy) generateScalpingSignals(tick algo.PriceTick) []algo.
 
 				ss.lastSignal = signal
 				ss.lastSignalTime = tick.Timestamp
+			} else {
+				fmt.Printf("[%s] ❌ SIGNAL BLOCKED: Position size too small (%.8f)\n", ss.name, quantity)
 			}
 		}
 	}
@@ -256,6 +315,19 @@ func (ss *ScalpingStrategy) calculatePositionSize(price, confidence float64) flo
 	}
 
 	return quantity
+}
+
+// logToFile logs debug messages to a file
+func (ss *ScalpingStrategy) logToFile(message string) {
+	logFile := fmt.Sprintf("/tmp/dazedtrader_%s.log", ss.name)
+	f, err := os.OpenFile(logFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+
+	logger := log.New(f, "", log.LstdFlags)
+	logger.Println(message)
 }
 
 // GetState returns the current strategy state
