@@ -9,14 +9,15 @@ import (
 // Momentum25DayStrategy implements the proven 25-day momentum strategy
 // Research shows this beats buy-and-hold with lower drawdown
 type Momentum25DayStrategy struct {
-	name           string
-	symbol         string
-	lookbackPeriod int
-	prices         []float64
-	priceHistory   []PricePoint
-	position       algo.Position
-	config         algo.StrategyConfig
-	lastSignalTime time.Time
+	name              string
+	symbol            string
+	lookbackPeriod    int
+	momentumThreshold float64
+	prices            []float64
+	priceHistory      []PricePoint
+	position          algo.Position
+	config            algo.StrategyConfig
+	lastSignalTime    time.Time
 }
 
 type PricePoint struct {
@@ -27,12 +28,13 @@ type PricePoint struct {
 // NewMomentum25DayStrategy creates a new 25-day momentum strategy
 func NewMomentum25DayStrategy(name, symbol string) *Momentum25DayStrategy {
 	return &Momentum25DayStrategy{
-		name:           name,
-		symbol:         symbol,
-		lookbackPeriod: 25, // Proven in research
-		prices:         make([]float64, 0),
-		priceHistory:   make([]PricePoint, 0),
-		lastSignalTime: time.Time{},
+		name:              name,
+		symbol:            symbol,
+		lookbackPeriod:    25, // Default, will be overridden by config
+		momentumThreshold: 1.0, // Default, will be overridden by config
+		prices:            make([]float64, 0),
+		priceHistory:      make([]PricePoint, 0),
+		lastSignalTime:    time.Time{},
 	}
 }
 
@@ -49,7 +51,16 @@ func (m *Momentum25DayStrategy) GetSymbol() string {
 // Initialize initializes the strategy with configuration
 func (m *Momentum25DayStrategy) Initialize(config algo.StrategyConfig) error {
 	m.config = config
-	log.Printf("[%s] Initialized 25-day momentum strategy for %s", m.name, m.symbol)
+
+	// Parse strategy-specific parameters
+	if params, ok := config.Parameters["lookback_period"].(float64); ok {
+		m.lookbackPeriod = int(params)
+	}
+	if params, ok := config.Parameters["momentum_threshold"].(float64); ok {
+		m.momentumThreshold = params
+	}
+
+	log.Printf("[%s] Initialized momentum strategy for %s (lookback: %d, threshold: %.1f%%)", m.name, m.symbol, m.lookbackPeriod, m.momentumThreshold)
 	return nil
 }
 
@@ -89,21 +100,18 @@ func (m *Momentum25DayStrategy) ProcessTick(tick algo.PriceTick) ([]algo.Signal,
 	var signal algo.SignalType
 	confidence := 0.7 // High confidence for proven strategy
 
-	// Minimum momentum threshold to avoid noise (1% minimum)
-	momentumThreshold := 1.0
-
-	if momentumPercent > momentumThreshold {
+	if momentumPercent > m.momentumThreshold {
 		// Positive momentum - uptrend
 		signal = algo.SignalBuy
 		log.Printf("[%s] POSITIVE MOMENTUM: +%.2f%% -> BUY signal", m.name, momentumPercent)
-	} else if momentumPercent < -momentumThreshold {
+	} else if momentumPercent < -m.momentumThreshold {
 		// Negative momentum - downtrend - only sell if profitable
 		signal = algo.SignalSell
 		log.Printf("[%s] NEGATIVE MOMENTUM: %.2f%% -> SELL signal (with profit protection)", m.name, momentumPercent)
 	} else {
 		// Weak momentum - hold
 		signal = algo.SignalHold
-		log.Printf("[%s] WEAK MOMENTUM: %.2f%% (threshold: ±%.1f%%) -> HOLD", m.name, momentumPercent, momentumThreshold)
+		log.Printf("[%s] WEAK MOMENTUM: %.2f%% (threshold: ±%.1f%%) -> HOLD", m.name, momentumPercent, m.momentumThreshold)
 	}
 
 	// Generate signals based on momentum logic only (no artificial time restrictions)
